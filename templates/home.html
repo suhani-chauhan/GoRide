@@ -1,50 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ride Booking Home</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-        }
-        p {
-            color: #666;
-        }
-        .button {
-            display: inline-block;
-            padding: 10px 20px;
-            font-size: 16px;
-            color: white;
-            background-color: #007BFF;
-            border: none;
-            border-radius: 5px;
-            text-decoration: none;
-        }
-        .button:hover {
-            background-color: #0056b3;
-        }
-    </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RideNow – Book a ride</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#262a33;--text:#e8eaed;--muted:#8b93a1;--accent:#06c167;--danger:#ef4444}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{padding:18px 28px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:20px;margin:0}header span{color:var(--muted);font-size:13px}
+main{max-width:1100px;margin:24px auto;padding:0 20px;display:grid;grid-template-columns:380px 1fr;gap:20px}
+@media(max-width:860px){main{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+h2{font-size:15px;margin:0 0 14px}
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+input,select{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:#0f1115;color:var(--text);font-size:14px}
+button{cursor:pointer;border:0;border-radius:8px;padding:11px 14px;font-weight:600;font-size:14px}
+.primary{background:var(--accent);color:#04130a;width:100%;margin-top:14px}
+.primary:disabled{opacity:.5;cursor:not-allowed}
+.ghost{background:transparent;color:var(--danger);border:1px solid var(--danger);padding:5px 10px;font-size:12px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.est{margin-top:14px;padding:12px;border-radius:8px;background:#0f1115;border:1px dashed var(--line);font-size:13px;color:var(--muted)}
+.est b{color:var(--text);font-size:22px;display:block;margin-top:2px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat small{color:var(--muted);font-size:12px}.stat div{font-size:22px;font-weight:700;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:500}
+.tag{padding:2px 8px;border-radius:99px;font-size:11px}
+.ok{background:#06c16722;color:var(--accent)}.bad{background:#ef444422;color:var(--danger)}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--line);padding:12px 16px;border-radius:8px;display:none}
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>Welcome to the Ride Booking Service</h1>
-        <p>Book your ride with us and enjoy a seamless experience!</p>
-        <a href="/book" class="button">Book a Ride</a>
+<header><h1>🚖 RideNow</h1><span>Every booking streams to Azure Event Hubs</span></header>
+<main>
+  <section class="card">
+    <h2>Book a ride</h2>
+    <label>City</label><select id="city"></select>
+    <label>Pickup address</label><input id="pickup" placeholder="e.g. 221 Park Ave">
+    <label>Drop-off address</label><input id="dropoff" placeholder="e.g. JFK Terminal 4">
+    <div class="row">
+      <div><label>Ride type</label><select id="vehicle"></select></div>
+      <div><label>Payment</label><select id="payment"></select></div>
     </div>
+    <div class="est" id="est">Enter pickup and drop-off to see a fare estimate.</div>
+    <label>Your name</label><input id="name" placeholder="Full name">
+    <div class="row">
+      <div><label>Email</label><input id="email" type="email" placeholder="you@example.com"></div>
+      <div><label>Phone</label><input id="phone" placeholder="Optional"></div>
+    </div>
+    <label>Tip ($)</label><input id="tip" type="number" min="0" max="100" value="0">
+    <button class="primary" id="book" onclick="book()">Book ride</button>
+  </section>
+
+  <section>
+    <div class="stats">
+      <div class="stat"><small>Bookings</small><div id="s_total">0</div></div>
+      <div class="stat"><small>Cancelled</small><div id="s_cancel">0</div></div>
+      <div class="stat"><small>Revenue</small><div id="s_rev">$0.00</div></div>
+      <div class="stat"><small>Avg fare</small><div id="s_avg">$0.00</div></div>
+    </div>
+    <div class="card">
+      <h2>Recent rides</h2>
+      <table>
+        <thead><tr><th>Ref</th><th>Route</th><th>Type</th><th>Fare</th><th>Status</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const money = n => "$" + Number(n).toFixed(2);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.style.display = "block";
+  setTimeout(() => t.style.display = "none", 3000);
+}
+async function api(url, method = "GET", body) {
+  const r = await fetch(url, {method, headers: {"Content-Type": "application/json"},
+                              body: body ? JSON.stringify(body) : undefined});
+  const data = await r.json();
+  if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Please check the form fields");
+  return data;
+}
+const fill = (id, items, k, n) => $(id).innerHTML = items.map(i => `<option value="${i[k]}">${esc(i[n])}</option>`).join("");
+
+function payload() {
+  return {city_id: +$("city").value, pickup: $("pickup").value, dropoff: $("dropoff").value,
+          vehicle_type_id: +$("vehicle").value, payment_method_id: +$("payment").value,
+          passenger_name: $("name").value, passenger_email: $("email").value,
+          passenger_phone: $("phone").value, tip_amount: +$("tip").value || 0};
+}
+
+let timer;
+const scheduleEstimate = () => { clearTimeout(timer); timer = setTimeout(estimate, 400); };
+async function estimate() {
+  const p = payload();
+  if (p.pickup.trim().length < 3 || p.dropoff.trim().length < 3) {
+    $("est").innerHTML = "Enter pickup and drop-off to see a fare estimate."; return;
+  }
+  try {
+    const e = await api("/api/estimate", "POST", p);
+    $("est").innerHTML = `${e.distance_miles} mi · ${e.duration_minutes} min · surge ×${e.surge_multiplier}<b>${money(e.subtotal)}</b>`;
+  } catch (err) { $("est").textContent = err.message; }
+}
+
+async function book() {
+  const btn = $("book"); btn.disabled = true;
+  try {
+    const r = await api("/api/book", "POST", payload());
+    toast(`Booked ${r.confirmation_number} · ${money(r.total_fare)}`);
+    await refresh();
+  } catch (err) { toast(err.message); }
+  finally { btn.disabled = false; }
+}
+async function cancelRide(id) {
+  try { await api(`/api/cancel/${id}`, "POST"); toast("Ride cancelled"); await refresh(); }
+  catch (err) { toast(err.message); }
+}
+
+async function refresh() {
+  const [rides, s] = await Promise.all([api("/api/rides"), api("/api/stats")]);
+  $("s_total").textContent = s.total_bookings;
+  $("s_cancel").textContent = s.cancelled;
+  $("s_rev").textContent = money(s.revenue);
+  $("s_avg").textContent = money(s.avg_fare);
+  $("rows").innerHTML = rides.map(r => `
+    <tr><td>${esc(r.confirmation_number)}</td>
+        <td>${esc(r.pickup)} → ${esc(r.dropoff)}<br><small style="color:var(--muted)">${esc(r.city)}</small></td>
+        <td>${esc(r.vehicle_type)}</td><td>${money(r.total_fare)}</td>
+        <td><span class="tag ${r.status === "Confirmed" ? "ok" : "bad"}">${r.status}</span></td>
+        <td>${r.status === "Confirmed" ? `<button class="ghost" onclick="cancelRide('${r.ride_id}')">Cancel</button>` : ""}</td></tr>`
+  ).join("") || `<tr><td colspan="6" style="color:var(--muted)">No rides yet</td></tr>`;
+}
+
+(async () => {
+  const o = await api("/api/options");
+  fill("city", o.cities, "city_id", "city");
+  fill("vehicle", o.vehicle_types, "vehicle_type_id", "vehicle_type");
+  fill("payment", o.payment_methods, "payment_method_id", "payment_method");
+  ["city", "pickup", "dropoff", "vehicle"].forEach(id => $(id).addEventListener("input", scheduleEstimate));
+  refresh();
+})();
+</script>
 </body>
 </html>
