@@ -3,31 +3,36 @@ from pyspark.sql.functions import *
 from pyspark.sql.types import *
 
 
-rides_schema = StructType([StructField('ride_id', StringType(), True), StructField('confirmation_number', StringType(), True), StructField('passenger_id', StringType(), True), StructField('driver_id', StringType(), True), StructField('vehicle_id', StringType(), True), StructField('pickup_location_id', StringType(), True), StructField('dropoff_location_id', StringType(), True), StructField('vehicle_type_id', LongType(), True), StructField('vehicle_make_id', LongType(), True), StructField('payment_method_id', LongType(), True), StructField('ride_status_id', LongType(), True), StructField('pickup_city_id', LongType(), True), StructField('dropoff_city_id', LongType(), True), StructField('cancellation_reason_id', LongType(), True), StructField('passenger_name', StringType(), True), StructField('passenger_email', StringType(), True), StructField('passenger_phone', StringType(), True), StructField('driver_name', StringType(), True), StructField('driver_rating', DoubleType(), True), StructField('driver_phone', StringType(), True), StructField('driver_license', StringType(), True), StructField('vehicle_model', StringType(), True), StructField('vehicle_color', StringType(), True), StructField('license_plate', StringType(), True), StructField('pickup_address', StringType(), True), StructField('pickup_latitude', DoubleType(), True), StructField('pickup_longitude', DoubleType(), True), StructField('dropoff_address', StringType(), True), StructField('dropoff_latitude', DoubleType(), True), StructField('dropoff_longitude', DoubleType(), True), StructField('distance_miles', DoubleType(), True), StructField('duration_minutes', LongType(), True), StructField('booking_timestamp', TimestampType(), True), StructField('pickup_timestamp', StringType(), True), StructField('dropoff_timestamp', StringType(), True), StructField('base_fare', DoubleType(), True), StructField('distance_fare', DoubleType(), True), StructField('time_fare', DoubleType(), True), StructField('surge_multiplier', DoubleType(), True), StructField('subtotal', DoubleType(), True), StructField('tip_amount', DoubleType(), True), StructField('total_fare', DoubleType(), True), StructField('rating', DoubleType(), True)])
+# Event Hubs configuration
+EH_NAMESPACE  = "GoRide"
+EH_NAME = "goride-topic"
 
 
-# Empty Streaming Table
-dp.create_streaming_table("stg_rides")
+EH_CONN_STR  = spark.conf.get("connection_string")
 
-# Bulk/Initial Load
-@dp.append_flow(
-  target = "stg_rides"
-  ) 
-def rides_bulk():
-    df = spark.readStream.table("bulk_rides")
-    df = df.withColumn("booking_timestamp", col("booking_timestamp").cast("timestamp"))
-    return df 
+KAFKA_OPTIONS = {
+  "kafka.bootstrap.servers"  : f"{EH_NAMESPACE}.servicebus.windows.net:9093",
+  "subscribe"                : EH_NAME,
+  "kafka.sasl.mechanism"     : "PLAIN",
+  "kafka.security.protocol"  : "SASL_SSL",
+  "kafka.sasl.jaas.config"   : f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"{EH_CONN_STR}\";",
+  "kafka.request.timeout.ms" : 10000,
+  "kafka.session.timeout.ms" : 10000,
+  "maxOffsetsPerTrigger"     : 10000,
+  "failOnDataLoss"           : 'true',
+  "startingOffsets"          : 'earliest'
+}
 
-# Streaming Load
-@dp.append_flow(
-  target = "stg_rides"
-  ) 
-def rides_stream():
-    df = spark.readStream.table("rides_raw")
-    df_parsed = df.withColumn("parsed_rides", from_json(col("rides"), rides_schema))\
-                .select("parsed_rides.*")
-    return df_parsed
+@dp.table
+def rides_raw():
+    df = spark.readStream.format("kafka")\
+                .options(**KAFKA_OPTIONS)\
+                .load()
 
+    # Converting Values To string
+    df = df.withColumn("rides",col("value").cast("string"))
+
+    return df
 
 
 
